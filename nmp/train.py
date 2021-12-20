@@ -11,6 +11,7 @@ from nmp import settings
 @click.command(help="nmp.train env_name exp_name")
 @click.argument("env-name", type=str)
 @click.argument("exp-dir", type=str)
+@click.option("-smplk","--simple-like/--no-simple-like",is_flag=True,default=False)
 @click.option("-s", "--seed", default=None, type=int)
 @click.option("-resume", "--resume/--no-resume", is_flag=True, default=False)
 @click.option("-mode", "--mode", default="her")
@@ -39,6 +40,7 @@ from nmp import settings
 def main(
     env_name,
     exp_dir,
+    simple_like,
     seed,
     resume,
     mode,
@@ -85,6 +87,7 @@ def main(
         env_name=env_name,
         algorithm="sac",
         version="normal",
+        simple_like = simple_like,
         seed=seed,
         resume=resume,
         mode=mode,
