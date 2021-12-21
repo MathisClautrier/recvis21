@@ -38,6 +38,8 @@ class MazeGoal(Base):
 
         self.fig, self.ax, self.pos = None, None, None
         self.simple_like = False
+        self.solution=[]
+        self.target=0
 
     def _reset(self, idx_env=None, start=None, goal=None):
         model_wrapper = self.model_wrapper
@@ -159,6 +161,8 @@ class MazeGoal(Base):
                         path.append(current_path)
                         to_treat.append([children,num])
                         if children == goal:
+                            self.solution = current_path
+                            self.target=0
                             return current_path
             explored.append(current)
         return False
@@ -179,21 +183,38 @@ class MazeGoal(Base):
         idx,idy = cell//self.grid_size, cell%self.grid_size
         pos = self.state.q[:2]
         futur_pos = pos + action
-        futur_pos[0] = max(min(futur_pos[0],idx/self.grid_size+1.5*self.thickness),(idx+1)/self.grid_size-1.5*self.thickness)
-        futur_pos[1] = max(min(futur_pos[1],idy/self.grid_size+1.5*self.thickness),(idy+1)/self.grid_size-1.5*self.thickness)
+        futur_pos[0] = min(max(futur_pos[0],idx/self.grid_size+1.5*self.thickness),(idx+1)/self.grid_size-1.5*self.thickness)
+        futur_pos[1] = min(max(futur_pos[1],idy/self.grid_size+1.5*self.thickness),(idy+1)/self.grid_size-1.5*self.thickness)
         return futur_pos - pos
     
     def get_action(self,direction,cell,noisy):
         """ computes the most efficient action to reach a cell given the related direction, can add noise to the action"""
         if noisy:
-            direction += ((np.random.random(2)-0.5)*0.30 +.1)*0.07
+            direction += (np.random.random(2)-0.5)
+        if noisy:
+            direction = self.set_within_margin(cell,direction)
         action = direction*(np.abs(direction) <0.07) +\
         np.array([0.07,0.07])*(np.abs(direction) >0.07)*np.sign(direction)
-        if noisy:
-            action = self.set_within_margin(cell,action)
         closest= bool(np.prod(np.abs(action)<0.0105)) #to know if we can be closer
         action = action/0.07
         return action,closest
+    
+    def one_step_oracle(self,noisy=True):
+        """ compute one step of the oracle, could be improve in terms of performance """
+        current_pos = self.get_cell_indexes(transform=True)
+        desired_cell = self.solution[self.target]
+        direction = self.get_direction(desired_cell)
+        action,closest = self.get_action(direction,desired_cell,noisy)
+        if closest and self.target!= len(self.solution)-1:
+            self.target+=1
+            return self.one_step_oracle(noisy)
+        elif closest:
+            direction = self.get_direction_to_goal()
+            action,closest = self.get_action(direction,None,False)
+            return action
+        else:
+            return action
+            
     
     def oracle(self,noisy=True):
         """ An oracle that performs the shortest safe path (i.e the one staying at the cells' center)"""
@@ -203,12 +224,14 @@ class MazeGoal(Base):
             while not closest:
                 direction = self.get_direction(desired_cell)
                 action,closest = self.get_action(direction,desired_cell,noisy)
-                states,reward,done,infos=self.step(action)
+                _,_,done,_=self.step(action)
         closest = False
         while not closest:
             direction = self.get_direction_to_goal()
             action,closest = self.get_action(direction,None,False)
-            states,reward,done,infos=self.step(action)
+            _,_,done,_=self.step(action)
+            if done[0]:
+                break
         return done[0]
     
 

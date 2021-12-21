@@ -133,6 +133,7 @@ class ModelWrapper:
         if project_fn:
             qw = project_fn(qw)
         return qw
+    
 
     def random_free_configuration(self, project_fn=None):
         collide = True

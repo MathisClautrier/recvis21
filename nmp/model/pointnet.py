@@ -101,6 +101,104 @@ class PointNet(nn.Module):
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         n_params = sum([torch.prod(torch.tensor(p.size())) for p in model_parameters])
         return n_params.item()
+    
+class PointNetEncoder(nn.Module):
+    def __init__(
+        self,
+        output_size,
+        hidden_sizes,
+        robot_props,
+        elem_dim,
+        q_action_dim,
+        input_indices,
+        coordinate_frame,
+        output_activation=identity,
+        init_w=3e-3,
+        hidden_activation=F.elu,
+        embedding=10,
+    ):
+        super().__init__()
+        self.output_size = output_size
+        self.hidden_sizes = hidden_sizes
+        self.input_indices = input_indices
+        self.link_dim = robot_props[coordinate_frame]["link_dim"]
+        self.config_dim = robot_props[coordinate_frame]["config_dim"]
+        self.goal_dim = robot_props[coordinate_frame]["goal_rep_dim"]
+        self.elem_dim = elem_dim
+        self.coordinate_frame = coordinate_frame
+        self.output_activation = output_activation
+        
+        self.q_action_dim = q_action_dim
+        self.blocks_sizes = get_blocks_sizes(
+            self.elem_dim,
+            self.config_dim,
+            self.goal_dim,
+            self.q_action_dim,
+            self.hidden_sizes,
+            self.coordinate_frame,
+        )
+
+        self.block0 = MLPBlock(
+            self.blocks_sizes[0],
+            hidden_activation=hidden_activation,
+            output_activation=F.elu,
+        )
+        self.block1 = MLPBlock(
+            self.blocks_sizes[1],
+            hidden_activation=hidden_activation,
+            output_activation=F.elu,
+        )
+        self.layers = nn.Sequential(
+          nn.Linear(256,128),
+          nn.BatchNorm1d(num_features=128),
+          nn.LeakyReLU(0.1),
+          nn.Linear(128,128),
+          nn.BatchNorm1d(num_features=128),
+          nn.LeakyReLU(0.1),
+          nn.Linear(128,128),
+          nn.BatchNorm1d(num_features=128),
+          nn.LeakyReLU(0.1),
+          nn.Linear(128,128),
+          nn.BatchNorm1d(num_features=128),
+          nn.LeakyReLU(0.1),
+          nn.Linear(128,128),
+          nn.BatchNorm1d(num_features=128),
+          nn.LeakyReLU(0.1),
+          nn.Linear(128,2*embedding),
+          nn.BatchNorm1d(num_features=2*embedding),
+        )
+
+    def forward(self, *input, return_features=False):
+        obstacles, links, goal, action, mask = process_input(
+            self.input_indices, self.elem_dim, self.coordinate_frame, *input
+        )
+        batch_size = obstacles.shape[0]
+
+        if self.coordinate_frame == "local":
+            # early action integration
+            h = torch.cat((obstacles, action), dim=2)
+            # late action integration
+            # h = obstacles
+        elif self.coordinate_frame == "global":
+            h = torch.cat((obstacles, links, goal, action), dim=2)
+
+        h = self.block0(h)
+        h = h * mask[..., None]
+        h = torch.max(h, 1)[0]
+
+        if self.coordinate_frame == "local":
+            if self.goal_dim > 0:
+                h = torch.cat((h, goal), dim=1)
+
+        h = self.block1(h)
+
+        output = self.layers(h)
+        return output
+
+    def num_params(self):
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        n_params = sum([torch.prod(torch.tensor(p.size())) for p in model_parameters])
+        return n_params.item()
 
 
 def get_blocks_sizes(
@@ -128,7 +226,6 @@ def process_input(input_indices, elem_dim, coordinate_frame, *input):
         out, action = input
     else:
         out, action = input[0], None
-
     batch_size = out.shape[0]
     obstacles = out[:, input_indices["obstacles"]]
     n_elems = obstacles[:, -1]
