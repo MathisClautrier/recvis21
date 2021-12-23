@@ -11,6 +11,8 @@ from nmp.model.skill import SkillPrior
 import argparse
 from os import listdir
 from os.path import isfile, join
+import os
+import logging
 
 parser = argparse.ArgumentParser(description='prior_training')
 parser.add_argument('--env-name', type=str, default='Maze-Medium-v0', help='environment ID')
@@ -28,7 +30,7 @@ parser.add_argument('--batch-size',type = int, default = 16)
 parser.add_argument('--epochs',type = int, default = 1)
 parser.add_argument('--GPU',  action='store_true')
 parser.add_argument('--beta', type = float, default = 1e-2)
-parser.add_argument('--learning_rate',type = float, default = 1e-3)
+parser.add_argument('--lr',type = float, default = 1e-3)
 parser.add_argument('--beta1', type = float, default = 0.9)
 parser.add_argument('--beta2', type = float, default = 0.999)
 
@@ -48,7 +50,7 @@ argsdic = vars(args)
 env = gym.make(args.env_name)
 
 argsdic["policy_kwargs"]=dict(hidden_dim=args.hidden_dim, n_layers=args.n_layers)
-_, policy_kwargs = get_policy_network(argsdic["archi"], agrsdic["policy_kwargs"], env, "vanilla")
+_, policy_kwargs = get_policy_network(argsdic["archi"], argsdic["policy_kwargs"], env, "vanilla")
 
 Enc = PointNetEncoder(**policy_kwargs, embedding = args.embedding_dim)
 
@@ -104,24 +106,24 @@ trainingLoader = torch.utils.data.DataLoader(datasetT, batch_size = args.batch_s
 datasetV = SkillDataset(args.data_dir+'/validation',args.H)
 validationLoader = torch.utils.data.DataLoader(datasetV, batch_size = 100)
 
-optimizer = optim.RAdam(model.parameters(), lr=args.lr, betas=[args.beta1,args.beta2])
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=[args.beta1,args.beta2])
 
 for epoch in tqdm(range(args.epochs)):
     running_loss=0
     m=0
     model.train()
     for states,actions in trainingLoader:
-        
+        actions=actions.to(device)
         optimizer.zero_grad()
-        z_mu,z_var,zs_mu,zs_var,q_z,p_z,pa_z,z,actions_ =  model.forward(states.to(device),actions.to(device))
+        (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
         
         loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
         
         loss += -args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
         
         with torch.no_grad():
-            q_z_no_grad = model.obtain_q_z(actions.to(device))
-        loss += torch.distributions.kil.kil_divergence(q_z_no_grad,pa_z)
+            q_z_no_grad = model.obtain_q_z(actions)
+        loss += torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z)
         
         loss.backward()
         
@@ -134,16 +136,18 @@ for epoch in tqdm(range(args.epochs)):
     validation_loss=0
     k=0
     for states,actions in validationLoader:
-        z_mu,z_var,zs_mu,zs_var,q_z,p_z,pa_z,z,actions_ =  model.forward(states.to(device),actions.to(device))
+        actions=actions.to(device)
+        (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
         
         loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
         
         loss += -args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
         
-        q_z_no_grad = model.obtain_q_z(actions.to(device))
-        loss += torch.distributions.kil.kil_divergence(q_z_no_grad,pa_z)
+        q_z_no_grad = model.obtain_q_z(actions)
+        loss += torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z)
         
         validation_loss +=loss.item()
+        k+=1
     logger.info(str(epoch)+','+str(training_loss/m)+','+str(validation_loss/k))
 
 torch.save(model.state_dict(), args.log_dir+'/'+args.log_name)

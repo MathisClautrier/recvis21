@@ -158,14 +158,7 @@ class PointNetEncoder(nn.Module):
           nn.Linear(128,128),
           nn.BatchNorm1d(num_features=128),
           nn.LeakyReLU(0.1),
-          nn.Linear(128,128),
-          nn.BatchNorm1d(num_features=128),
-          nn.LeakyReLU(0.1),
-          nn.Linear(128,128),
-          nn.BatchNorm1d(num_features=128),
-          nn.LeakyReLU(0.1),
           nn.Linear(128,2*embedding),
-          nn.BatchNorm1d(num_features=2*embedding),
         )
 
     def forward(self, *input, return_features=False):

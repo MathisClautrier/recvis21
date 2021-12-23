@@ -25,6 +25,7 @@ class TanhGaussianPointNetPolicy(PointNet, ExplorationPolicy):
         super().__init__(hidden_sizes=hidden_sizes, output_size=action_dim, **kwargs)
         self.log_std = None
         self.std = std
+        self.spirl = False
         if std is None:
             self.last_fc_log_std = nn.Linear(hidden_sizes[-1], action_dim)
             self.last_fc_log_std.weight.data.uniform_(-init_w, init_w)

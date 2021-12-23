@@ -78,8 +78,11 @@ def get_policy_network(archi, kwargs, env, policy_type):
     return policy_class, kwargs
 
 
-def get_q_network(archi, kwargs, env, classification=False):
-    action_dim = env.action_space.low.size
+def get_q_network(archi, kwargs, env, classification=False,embedding=None):
+    if embedding is None:
+        action_dim = env.action_space.low.size
+    else:
+        action_dim = embedding
     obs_dim = env.observation_space.spaces["observation"].low.size
     goal_dim = env.observation_space.spaces["representation_goal"].low.size
     kwargs["output_size"] = 1
