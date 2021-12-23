@@ -109,45 +109,46 @@ validationLoader = torch.utils.data.DataLoader(datasetV, batch_size = 100)
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=[args.beta1,args.beta2])
 
 for epoch in tqdm(range(args.epochs)):
-    running_loss=0
-    m=0
+    trLOSS,trMSE,trKL1,trKL2,m=0,0,0,0,0
     model.train()
     for states,actions in trainingLoader:
         actions=actions.to(device)
         optimizer.zero_grad()
         (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
         
+
         loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
-        
-        loss += -args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
-        
+        trMSE = loss.item()
+        KL1 = args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
+        loss += KL1
+        trKL1 += KL1.item()
         with torch.no_grad():
             q_z_no_grad = model.obtain_q_z(actions)
-        loss += torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z)
-        
+        KL2=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean()
+        loss += KL2
+        trKL2 = KL2.item()
         loss.backward()
         
         optimizer.step()
         
-        running_loss += loss.item()
         m+=1
+    trLOSS = trMSE + trKL1 + trKL2
     model.eval()
     
-    validation_loss=0
-    k=0
+    valLOSS,valMSE,valKL1,valKL2,k=0,0,0,0,0
     for states,actions in validationLoader:
         actions=actions.to(device)
         (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
         
-        loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
+        valMSE += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
+        valKL1 += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean().item()
         
-        loss += -args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
-        
-        q_z_no_grad = model.obtain_q_z(actions)
-        loss += torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z)
-        
-        validation_loss +=loss.item()
+        with torch.no_grad():
+            q_z_no_grad = model.obtain_q_z(actions)
+            
+        valKL2+=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean().item()
         k+=1
-    logger.info(str(epoch)+','+str(training_loss/m)+','+str(validation_loss/k))
+    valLOSS = valKL1+valMSE+valKL2
+    logger.info(str(epoch)+','+str(trLOSS/m)+','+str(validation_loss/k))
 
 torch.save(model.state_dict(), args.log_dir+'/'+args.log_name)
