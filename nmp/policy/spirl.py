@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from rlkit.torch import pytorch_util as ptu
 
-class SPiRL_policy(nn.Module):
+class SpirlPolicy(nn.Module):
     def __init__(
         self,
         encoder,

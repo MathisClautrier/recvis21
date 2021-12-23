@@ -86,7 +86,7 @@ class SkillPrior(nn.Module):
         hidden_size,
     ):
         super().__init__()
-        self.stateEncoder = sEncoder
+        self.statesEncoder = sEncoder
         self.actionsEncoder = EncoderSeq(embedding_size,H,hidden_size)
         self.actionsDecoder = DecoderSeq(embedding_size,H,hidden_size)
         self.z_dim = embedding_size
@@ -96,7 +96,7 @@ class SkillPrior(nn.Module):
 
     def encode(self, states):
         Zstate = self.stateEncoder(states)
-        mustate,sigstate = Zstate[:,:self.z_dim],F.softplus(Zstate[:,self.z_dim:])
+        mu,std = Zstate[:,:self.z_dim],F.softplus(Zstate[:,self.z_dim:])
         return mu,std
     
         
@@ -120,7 +120,7 @@ class SkillPrior(nn.Module):
         pa_z,_ = self.reparameterize(zs_mean,zs_var)
         (z_mean,z_var),(q_z,p_z) = self.actionsEncoder(actions)
         z = q_z.rsample()
-        x_ = self.decode(z)
+        x_ = self.actionsDecoder(z)
         
         return (z_mean, z_var,zs_mean,zs_var), (q_z, p_z,pa_z), z, x_
     

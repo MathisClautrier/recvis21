@@ -86,6 +86,53 @@ def evaluate(rollout_fn, episodes):
     #     features = np.array(policy.stochastic_policy.hist_features)[:, 0]
     #     show_features(features, lengths, successes)
 
+    return success_rate, collisions, paths_states,paths
+
+def get_paths(rollout_fn, episodes):
+    returns = []
+    rewards = []
+    n_steps = []
+    lengths = []
+    successes = []
+    paths_states = []
+
+    def process_path(path):
+        obs = path["observations"]
+        n = obs.shape[0]
+        length = 0
+        path_states = []
+        for i in range(n):
+            q0 = obs[i]["achieved_q"]
+            if i < n - 1:
+                q1 = obs[i + 1]["achieved_q"]
+                length += np.linalg.norm(q1 - q0)
+            path_states.append(q0[:2])
+        paths_states.append(path_states)
+        lengths.append(length)
+        successes.append(path["env_infos"]["success"][-1])
+        rewards.append(path["rewards"])
+        returns.append(np.sum(path["rewards"]))
+        n_steps.append(len(path["rewards"]))
+
+    paths = runs(rollout_fn, process_path, episodes)
+    returns = np.array(returns)
+    successes = np.array(successes)
+    print(f"Mean {returns.mean()} Max {returns.max()}, Min {returns.min()}")
+    success_rate = sum(successes) / episodes
+    mean_steps = np.array(n_steps).mean()
+    mean_length = np.array(lengths).mean()
+    max_length = np.array(lengths).max()
+    print("mean steps", mean_steps)
+    print("mean length", mean_length)
+    collisions = 0
+    for r in rewards:
+        collisions += np.sum(r < -0.1)
+    collisions /= episodes
+
+    # if hasattr(policy.stochastic_policy, "hist_features"):
+    #     features = np.array(policy.stochastic_policy.hist_features)[:, 0]
+    #     show_features(features, lengths, successes)
+
     return success_rate, collisions, paths_states
 
 
