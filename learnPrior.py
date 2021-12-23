@@ -149,6 +149,7 @@ for epoch in tqdm(range(args.epochs)):
         valKL2+=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean().item()
         k+=1
     valLOSS = valKL1+valMSE+valKL2
-    logger.info(str(epoch)+','+str(trLOSS/m)+','+str(validation_loss/k))
+    logger.info(str(epoch)+','+str(trLOSS/m)+','+str(trKL1/m)+','+str(trKL2/m)+','+str(trMSE/m)+','+str(valLOSS/k)\
+    +','+str(valMSE/k)+','+str(valKL1/k)+','+str(valKL2/k))
 
 torch.save(model.state_dict(), args.log_dir+'/'+args.log_name)
