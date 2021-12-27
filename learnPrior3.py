@@ -134,7 +134,7 @@ for epoch in tqdm(range(args.epochs)):
         m+=1
     model.eval()
     
-    vL1,vL2,vL3,k=0,0,0,0
+    vL1,vL2,k=0,0,0
     for states,actions in validationLoader:
         actions=actions.to(device)
         (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
@@ -146,10 +146,6 @@ for epoch in tqdm(range(args.epochs)):
         _,_,_,actionsbis_ = model.forward_state(states.to(device))
             
         MSE=torch.square(actions - actionsbis_).sum(axis=1).mean(axis=0).mean()
-        
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
         
         vL1+=loss.item()
         vL2+=MSE.item()

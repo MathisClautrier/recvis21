@@ -115,8 +115,8 @@ for epoch in tqdm(range(args.epochs)):
         actions=actions.to(device)
         (zs_mu,zs_var),(qa_z,pa_z),z,actions_ = model.forward_state(states.to(device))
 
-        MSE = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
-        loss += MSE
+        loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
+        tL1+=loss.item()
         loss += args.beta*torch.distributions.kl.kl_divergence(qa_z,pa_z).sum(axis=1).mean()
         
         optimizer.zero_grad()
@@ -128,20 +128,15 @@ for epoch in tqdm(range(args.epochs)):
         m+=1
     model.eval()
     
-    vL1,vL2,k=0,0,0,0
+    vL1,vL2,k=0,0,0
     for states,actions in validationLoader:
         actions=actions.to(device)
         (zs_mu,zs_var),(qa_z,pa_z),z,actions_ = model.forward_state(states.to(device))
         
-        MSE = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
-        loss += MSE
+        loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
+        vL1+=loss.item()
         loss += args.beta*torch.distributions.kl.kl_divergence(qa_z,pa_z).sum(axis=1).mean()
-        
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
 
-        vL1+=MSE.item()
         vL2+=loss.item()
         k+=1
     logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k))
