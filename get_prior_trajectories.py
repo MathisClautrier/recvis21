@@ -17,7 +17,7 @@ parser.add_argument('--H', type = int, default = 10, help = 'trajectory size')
 parser.add_argument('--model-dir', type = str, default = 'not_provided',help='direction to the saved model, if not provided use an oracle')
 parser.add_argument('--noisy', action = 'store_true', help ='oracle mode')
 parser.add_argument('--log-dir', type = str, default ='.')
-parser.add_argument('--n-samples',type = int, default = 10000)
+parser.add_argument('--n-samples',type = int, default = 1000000)
 parser.add_argument('--GPU',  action='store_true')
 
 args = parser.parse_args()
@@ -29,7 +29,7 @@ if args.GPU:
     device = 'cuda'
 else:
     device = 'cpu'
-    
+
 if args.model_dir != 'not_provided':
     load_models = torch.load(args.model_dir,map_location=torch.device(device))
     policy=load_models['evaluation/policy']
@@ -89,7 +89,7 @@ while count < n_train:
             if count == n_train:
                 break
 
-count=0                
+count=0
 while count < n_val:
     state = env.reset()
     done = False
@@ -135,4 +135,3 @@ while count < n_val:
             count+=1
             if count == n_val:
                 break
-                    

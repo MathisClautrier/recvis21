@@ -80,10 +80,10 @@ class MazeGoal(Base):
         )
         _, collide = self.stopping_configuration(straight_path)
         return collide.any()
-    
+
     def turn_simple_like(self):
         self.simple_like = not self.simple_like
-    
+
     def get_cell_indexes(self,goal=False,transform=False):
         """gives the indexes of the cell where the goal or the robot is
         Boolean goal set to False to have robot information, True for the goal"""
@@ -95,7 +95,7 @@ class MazeGoal(Base):
         if transform:
             return self.grid_size*np.int(ix) + np.int(iy)
         return np.int(ix),np.int(iy)
-    
+
     def available_path(self,depth_max=np.inf):
         """Computes all possible path of length depth_max starting from the robot position (BFS)
         One unit is equal to one cell length, specifies the paths whose length is equal to depth max"""
@@ -127,17 +127,17 @@ class MazeGoal(Base):
                             to_treat.append([children,num])
             explored.append(current)
         return path,wanted_path
-    
+
     def pick_goal_cell(self):
         """ randomly selects a cell whose distance to the robot follows the same distribution as in the simple maze."""
-        values = np.array([2, 3, 4, 5, 6, 7, 8, 9]) 
+        values = np.array([2, 3, 4, 5, 6, 7, 8, 9])
         prob = np.array([0.0022 , 0.14768, 0.2606 , 0.2345 , 0.17393, 0.10553, 0.05643, 0.01913]) #histogram obtained by simulations
         depth = np.random.choice(values,p=prob)
         paths,wanted_path = self.available_path(depth_max=depth)
         N = len(wanted_path)
         i = np.random.randint(N)
         return paths[wanted_path[i]][-1]
-    
+
     def shortest_path(self):
         """Computes the shortest path starting between the robot and the target in terms of cells"""
         ix,iy = self.get_cell_indexes()
@@ -166,39 +166,39 @@ class MazeGoal(Base):
                             return current_path
             explored.append(current)
         return False
-    
+
     def get_direction(self,cell):
         """ computes the vector between the current position and the center of a target cell"""
         dind = (cell//self.grid_size +.5, cell%self.grid_size+.5)
         dpos = np.array([dind[0]/self.grid_size,dind[1]/self.grid_size])
         direction = dpos - self.state.q[:2]
         return direction
-    
+
     def get_direction_to_goal(self):
         """ computes the vector between the current position and the goal"""
         return self.goal_state.q[:2]-self.state.q[:2]
-    
+
     def set_within_margin(self,cell,action):
         """ In case of noisy actions, checks that the robot will be away from the walls."""
         idx,idy = cell//self.grid_size, cell%self.grid_size
         pos = self.state.q[:2]
         futur_pos = pos + action
-        futur_pos[0] = min(max(futur_pos[0],idx/self.grid_size+1.5*self.thickness),(idx+1)/self.grid_size-1.5*self.thickness)
-        futur_pos[1] = min(max(futur_pos[1],idy/self.grid_size+1.5*self.thickness),(idy+1)/self.grid_size-1.5*self.thickness)
+        futur_pos[0] = min(max(futur_pos[0],idx/self.grid_size+1.7*self.thickness),(idx+1)/self.grid_size-1.7*self.thickness)
+        futur_pos[1] = min(max(futur_pos[1],idy/self.grid_size+1.7*self.thickness),(idy+1)/self.grid_size-1.7*self.thickness)
         return futur_pos - pos
-    
+
     def get_action(self,direction,cell,noisy):
         """ computes the most efficient action to reach a cell given the related direction, can add noise to the action"""
         if noisy:
-            direction += (np.random.random(2)-0.5)
+            direction += 0.4*(np.random.random(2)-0.5)
         if noisy:
             direction = self.set_within_margin(cell,direction)
         action = direction*(np.abs(direction) <0.07) +\
         np.array([0.07,0.07])*(np.abs(direction) >0.07)*np.sign(direction)
-        closest= bool(np.prod(np.abs(action)<0.0105)) #to know if we can be closer
+        closest= bool(np.prod(np.abs(action)<0.02)) #to know if we can be closer
         action = action/0.07
         return action,closest
-    
+
     def one_step_oracle(self,noisy=True):
         """ compute one step of the oracle, could be improve in terms of performance """
         current_pos = self.get_cell_indexes(transform=True)
@@ -214,8 +214,8 @@ class MazeGoal(Base):
             return action
         else:
             return action
-            
-    
+
+
     def oracle(self,noisy=True):
         """ An oracle that performs the shortest safe path (i.e the one staying at the cells' center)"""
         solution = self.shortest_path()
@@ -233,7 +233,7 @@ class MazeGoal(Base):
             if done[0]:
                 break
         return done[0]
-    
+
 
     def get_obstacles_geoms(self, idx_env):
         np_random = self._np_random
