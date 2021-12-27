@@ -95,7 +95,7 @@ class SkillPrior(nn.Module):
 
 
     def encode(self, states):
-        Zstate = self.stateEncoder(states)
+        Zstate = self.statesEncoder(states)
         mu,std = Zstate[:,:self.z_dim],F.softplus(Zstate[:,self.z_dim:])
         return mu,std
     
@@ -114,6 +114,13 @@ class SkillPrior(nn.Module):
         zs_mean,zs_var = self.encode(states)
         pa_z,_ = self.reparameterize(zs_mean,zs_var)
         return pa_z
+    
+    def forward_state(self,states):
+        zs_mean,zs_var = self.encode(states)
+        pa_z,qa_z = self.reparameterize(zs_mean,zs_var)
+        z = pa_z.rsample()
+        x_ = self.actionsDecoder(z)
+        return (zs_mean,zs_var),(pa_z,qa_z),z,x_
                
     def forward(self, states,actions): 
         zs_mean,zs_var = self.encode(states)

@@ -106,8 +106,7 @@ trainingLoader = torch.utils.data.DataLoader(datasetT, batch_size = args.batch_s
 datasetV = SkillDataset(args.data_dir+'/validation',args.H)
 validationLoader = torch.utils.data.DataLoader(datasetV, batch_size = 100)
 
-optimizerStates = torch.optim.Adam(model.statesEncoder.parameters(), lr=args.lr, betas=[args.beta1,args.beta2])
-optimizerActions = torch.optim.Adam(list(model.actionsEncoder.parameters())+list(model.actionsDecoder.parameters()), lr=args.lr, betas=[args.beta1,args.beta2])
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=[args.beta1,args.beta2])
 
 for epoch in tqdm(range(args.epochs)):
     tL1,tL2,m=0,0,0
@@ -117,24 +116,21 @@ for epoch in tqdm(range(args.epochs)):
         (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
         
 
-        lossA = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
-        lossA += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
+        loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
+        loss += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
+        loss += torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean()
         
         with torch.no_grad():
-            q_z_no_grad = model.obtain_q_z(actions)
+            _,_,_,actionsbis_ = model.forward_state(states.to(device))
             
-        lossS=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean()
+        MSE=torch.square(actions - actionsbis_).sum(axis=1).mean(axis=0).mean()
         
-        optimizerStates.zero_grad()
-        lossS.backward()
-        optimizerStates.step()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
         
-        optimizerActions.zero_grad()
-        lossA.backward()
-        optimizerActions.step()
-        
-        tL1+=lossA.item()
-        tL2+=lossS.item()
+        tL1+=loss.item()
+        tL2+=MSE.item()
         m+=1
     model.eval()
     
@@ -143,17 +139,22 @@ for epoch in tqdm(range(args.epochs)):
         actions=actions.to(device)
         (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
         
-        vL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
-        vL1 += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean().item()
+        loss = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
+        loss += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
+        loss += torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean()
         
-        q_z_no_grad = model.obtain_q_z(actions)
+        _,_,_,actionsbis_ = model.forward_state(states.to(device))
             
-        vL2+=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean().item()
+        MSE=torch.square(actions - actionsbis_).sum(axis=1).mean(axis=0).mean()
         
-        _,_,z,actionsbis_ = model.forward_state(states.to(device))
-        VL3 += torch.square(actions - actionsbis_).sum(axis=1).mean(axis=0).mean().item()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        vL1+=loss.item()
+        vL2+=MSE.item()
         k+=1
-    logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k)','+str(vL3/k))
+    logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k))
 
 torch.save(model.statesEncoder.state_dict(), args.log_dir+'/'+args.log_name+'_prior.pth')
 torch.save(model.actionsEncoder.state_dict(), args.log_dir+'/'+args.log_name+'_enc.pth')
