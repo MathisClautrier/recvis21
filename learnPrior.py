@@ -62,7 +62,7 @@ class SkillDataset(torch.utils.data.Dataset):
         'Initialization'
         self.files = [f for f in listdir(directory) if isfile(join(directory, f))]
         self.dir = directory
-        self.keys = ['sequence','state']
+        self.keys = ['sequence','representation_goal','state']
         self.H = H
 
     def __len__(self):
@@ -74,8 +74,9 @@ class SkillDataset(torch.utils.data.Dataset):
 
         # Load data and get label
         data = np.load(self.dir+'/'+self.files[index])
-        A,S = (data[k] for k in self.keys) 
+        A,G,S = (data[k] for k in self.keys) 
         A = A.reshape(self.H,2)
+        S = np.hstack((S,G))
         return torch.Tensor(S),torch.Tensor(A)
 
 def log(path, file):
@@ -140,19 +141,20 @@ for epoch in tqdm(range(args.epochs)):
     
     vL1,vL2,vL3,k=0,0,0,0
     for states,actions in validationLoader:
-        actions=actions.to(device)
-        (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
-        
-        vL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
-        vL1 += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean().item()
-        
-        q_z_no_grad = model.obtain_q_z(actions)
-            
-        vL2+=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean().item()
-        
-        _,_,z,actionsbis_ = model.forward_state(states.to(device))
-        VL3 += torch.square(actions - actionsbis_).sum(axis=1).mean(axis=0).mean().item()
-        k+=1
+        with torch.no_grad():
+            actions=actions.to(device)
+            (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
+
+            vL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
+            vL1 += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean().item()
+
+            q_z_no_grad = model.obtain_q_z(actions)
+
+            vL2+=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean().item()
+
+            _,_,z,actionsbis_ = model.forward_state(states.to(device))
+            VL3 += torch.square(actions - actionsbis_).sum(axis=1).mean(axis=0).mean().item()
+            k+=1
     logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k)','+str(vL3/k))
 
 torch.save(model.statesEncoder.state_dict(), args.log_dir+'/'+args.log_name+'_prior.pth')
