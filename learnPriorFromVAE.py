@@ -66,7 +66,7 @@ class SkillDataset(torch.utils.data.Dataset):
         'Initialization'
         self.files = [f for f in listdir(directory) if isfile(join(directory, f))]
         self.dir = directory
-        self.keys = ['sequence','state']
+        self.keys = ['sequence','representation_goal','state']
         self.H = H
 
     def __len__(self):
@@ -78,8 +78,9 @@ class SkillDataset(torch.utils.data.Dataset):
 
         # Load data and get label
         data = np.load(self.dir+'/'+self.files[index])
-        A,S = (data[k] for k in self.keys)
+        A,G,S = (data[k] for k in self.keys) 
         A = A.reshape(self.H,2)
+        S = np.hstack((S,G))
         return torch.Tensor(S),torch.Tensor(A)
 
 def log(path, file):
@@ -123,10 +124,10 @@ for epoch in tqdm(range(args.epochs)):
     for states,actions in trainingLoader:
         actions=actions.to(device)
 
-        (zs_mean,zs_var),(pa_z,qa_z),z,actionsbis_ = model.forward_state(states.to(device))
+        (zs_mean,zs_var),(pa_z,qa_z),z,actions_ = model.forward_state(states.to(device))
         q_z = model.obtain_q_z(actions)
 
-        tL1= torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
+        tL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
 
         loss = torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean()
 
@@ -142,7 +143,7 @@ for epoch in tqdm(range(args.epochs)):
     for states,actions in validationLoader:
         actions=actions.to(device)
 
-        (zs_mean,zs_var),(pa_z,qa_z),z,actionsbis_ = model.forward_state(states.to(device))
+        (zs_mean,zs_var),(pa_z,qa_z),z,actions_ = model.forward_state(states.to(device))
         q_z = model.obtain_q_z(actions)
 
         vL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()

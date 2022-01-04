@@ -62,7 +62,7 @@ class SkillDataset(torch.utils.data.Dataset):
         'Initialization'
         self.files = [f for f in listdir(directory) if isfile(join(directory, f))]
         self.dir = directory
-        self.keys = ['sequence','representation_goal','state']
+        self.keys = ['sequence']
         self.H = H
 
     def __len__(self):
@@ -74,10 +74,8 @@ class SkillDataset(torch.utils.data.Dataset):
 
         # Load data and get label
         data = np.load(self.dir+'/'+self.files[index])
-        A,G,S = (data[k] for k in self.keys) 
-        A = A.reshape(self.H,2)
-        S = np.hstack((S,G))
-        return torch.Tensor(S),torch.Tensor(A)
+        A = (data[k] for k in self.keys) 
+        return torch.Tensor(A)
 
 def log(path, file):
     log_file = os.path.join(path, file)
@@ -107,56 +105,46 @@ trainingLoader = torch.utils.data.DataLoader(datasetT, batch_size = args.batch_s
 datasetV = SkillDataset(args.data_dir+'/validation',args.H)
 validationLoader = torch.utils.data.DataLoader(datasetV, batch_size = 100)
 
-optimizerStates = torch.optim.Adam(model.statesEncoder.parameters(), lr=args.lr, betas=[args.beta1,args.beta2])
+
 optimizerActions = torch.optim.Adam(list(model.actionsEncoder.parameters())+list(model.actionsDecoder.parameters()), lr=args.lr, betas=[args.beta1,args.beta2])
 
 for epoch in tqdm(range(args.epochs)):
-    tL1,tL2,m=0,0,0
+    tL1,tL2,,m=0,0,0
     model.train()
     for states,actions in trainingLoader:
         actions=actions.to(device)
-        (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
+        (z_mu,z_var),(q_z,p_z),z,actions_ =  model.forward_actions(actions)
         
 
-        lossA = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
-        lossA += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
+        loss = nn.MSELoss(reduction='none')(actions - actions_).sum(axis=-1).sum(axis=-1).mean()
+        tL1+=loss.item()
+        loss += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
         
-        with torch.no_grad():
-            q_z_no_grad = model.obtain_q_z(actions)
 
-        lossS=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean()
-        
-        optimizerStates.zero_grad()
-        lossS.backward()
-        optimizerStates.step()
-        
+
         optimizerActions.zero_grad()
-        lossA.backward()
+        loss.backward()
         optimizerActions.step()
         
-        tL1+=lossA.item()
-        tL2+=lossS.item()
+        tL2+=loss.item()
         m+=1
     model.eval()
     
-    vL1,vL2,vL3,k=0,0,0,0
+    vL1,vL2,k=0,0,0
     for states,actions in validationLoader:
         with torch.no_grad():
             actions=actions.to(device)
-            (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
+            (z_mu,z_var),(q_z,p_z),z,actions_ =  model.forward_actions(actions)
+        
 
-            vL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
-            vL1 += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean().item()
+            loss = nn.MSELoss(reduction='none')(actions - actions_).sum(axis=-1).sum(axis=-1).mean()
+            vl1 += loss.item()
+            loss += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
 
-            q_z_no_grad = model.obtain_q_z(actions)
+            vL2+=loss.item()
+            m+=1
+    logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k))
 
-            vL2+=torch.distributions.kl.kl_divergence(q_z_no_grad,pa_z).sum(axis=1).mean().item()
 
-            _,_,z,actionsbis_ = model.forward_state(states.to(device))
-            vL3 += torch.square(actions - actionsbis_).sum(axis=1).mean(axis=0).mean().item()
-            k+=1
-    logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k)+','+str(vL3/k))
-
-torch.save(model.statesEncoder.state_dict(), args.log_dir+'/'+args.log_name+'_prior.pth')
 torch.save(model.actionsEncoder.state_dict(), args.log_dir+'/'+args.log_name+'_enc.pth')
 torch.save(model.actionsDecoder.state_dict(), args.log_dir+'/'+args.log_name+'_dec.pth')

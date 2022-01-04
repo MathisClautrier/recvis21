@@ -76,7 +76,30 @@ class EncoderSeq(nn.Module):
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         n_params = sum([torch.prod(torch.tensor(p.size())) for p in model_parameters])
         return n_params.item()
-    
+
+class MlpSkillEncoder(nn.Module):
+    def __init__(
+        self,
+        n_inputs,
+        z_dim,
+    ):
+        super().__init__()
+        self.layers = nn.Sequential(
+          nn.Linear(n_inputs,256),
+          nn.ELU(),
+          nn.Linear(256,128),
+          nn.ELU(),
+          nn.Linear(128,128),
+          nn.ELU(),
+          nn.Linear(128,2*z_dim),
+        )
+        self.z_dim = z_dim
+        
+    def forward(self,inputs):
+        h = self.layers(inputs)
+        return h
+            
+        
 class SkillPrior(nn.Module):
     def __init__(
         self,
@@ -121,6 +144,12 @@ class SkillPrior(nn.Module):
         z = pa_z.rsample()
         x_ = self.actionsDecoder(z)
         return (zs_mean,zs_var),(pa_z,qa_z),z,x_
+    
+    def forward_actions(self,action):
+        (mu,std),(q_z,p_z) = self.actionsEncoder(actions)
+        z = q_z.rsample()
+        x_ = self.actionsDecoder(z)
+        return (zs_mean,zs_var),(q_z,p_z),z,x_
                
     def forward(self, states,actions): 
         zs_mean,zs_var = self.encode(states)
