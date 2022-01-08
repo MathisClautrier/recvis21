@@ -93,6 +93,12 @@ class MlpSkillEncoder(nn.Module):
         h = self.layers(inputs)
         return h
 
+    def obtain_pa_z(self,states):
+        h = self.forward(states)
+        z_mu,z_std = h[:,:self.z_dim],F.softplus(h[:,self.z_dim:])
+        pa_z = torch.distributions.normal.Normal(z_mu, z_std)
+        return pa_z
+
 
 class SkillPrior(nn.Module):
     def __init__(

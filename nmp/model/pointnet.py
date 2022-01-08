@@ -86,7 +86,6 @@ class PointNet(nn.Module):
 
         if self.coordinate_frame == "local":
             if self.goal_dim > 0:
-                print('o')
                 h = torch.cat((h, goal), dim=1)
 
         h = self.block1(h)

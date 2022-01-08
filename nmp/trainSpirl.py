@@ -65,7 +65,9 @@ def main(
     cpu,
     embedding,
     dir_models,
+    h,
     hidden_dim_lstm,
+    target_divergence,
 ):
     valid_modes = ["vanilla", "her"]
     valid_archi = [
@@ -82,9 +84,9 @@ def main(
     exp_dir = os.path.join(machine_log_dir, exp_dir, f"seed{seed}")
     # multi-gpu and batch size scaling
     replay_buffer_size = replay_buffer_size
-    num_expl_steps_per_train_loop = 1000
-    num_eval_steps_per_epoch = 1000
-    min_num_steps_before_training = 1000
+    num_expl_steps_per_train_loop = 100
+    num_eval_steps_per_epoch = 100
+    min_num_steps_before_training = 100
     num_trains_per_train_loop = 1000
     # learning rate and soft update linear scaling
     policy_lr = learning_rate
@@ -101,7 +103,7 @@ def main(
         h=h,
         hidden_dim_lstm=hidden_dim_lstm,
         archi=archi,
-        replay_buffer_kwargs=dict(max_replay_buffer_size=replay_buffer_size,),
+        replay_buffer_kwargs=dict(max_replay_buffer_size=replay_buffer_size,embedding = embedding),
         algorithm_kwargs=dict(
             batch_size=batch_size,
             num_epochs=epochs,
@@ -125,6 +127,7 @@ def main(
         qf_kwargs=dict(hidden_dim=hidden_dim, n_layers=n_layers),
         policy_kwargs=dict(hidden_dim=hidden_dim, n_layers=n_layers),
         log_dir=exp_dir,
+        MLP = True,
     )
     if mode == "her":
         variant["replay_buffer_kwargs"].update(
@@ -144,7 +147,7 @@ def main(
         "snapshot_gap": snapshot_gap,
     }
     setup_logger(**setup_logger_kwargs)
-    ptu.set_gpu_mode(not cpu, distributed_mode=False)
+    ptu.set_gpu_mode(False, distributed_mode=False)
     print(f"Start training...")
     spirl(variant)
 

@@ -12,11 +12,11 @@ from rlkit.samplers.data_collector import (
 )
 from rlkit.torch.her.her import HERTrainer
 from rlkit.torch.sac.policies import MakeDeterministic
-from rlkit.torch.sac.sac import SACTrainer
+from rlkit.torch.spirl.spirl import SPIRLTrainer
 from rlkit.torch.torch_rl_algorithm import TorchBatchRLAlgorithm
-from nmp.model.skill import DecoderSeq
+from nmp.model.skill import DecoderSeq, MlpSkillEncoder
 from nmp.model.pointnet import  PointNetEncoder
-from nmp.model.policy.spirl import SpirlPolicy
+from nmp.policy.spirl import SpirlPolicy
 
 from nmp.launcher import utils
 import copy
@@ -24,26 +24,31 @@ from nmp.launcher.sac import(get_replay_buffer,
                              get_path_collector,
                             )
 
+
 def get_networks(variant, expl_env):
     """
     Define Q networks and policy network
     """
-    
-    
+
+
     qf_kwargs = variant["qf_kwargs"]
     dir_models = variant["dir_models"]
-    
-    _, policy_kwargs = get_policy_network(variant["archi"], variant["policy_kwargs"], expl_env, "vanilla")
-    prior_skill = PointNetEncoder(**policy_kwargs, embedding = variant["embedding"])
+
+    if variant['MLP']:
+        input_size = expl_env.observation_space.spaces["observation"].low.size
+        prior_skill = MlpSkillEncoder(input_size+2,variant["embedding"])
+    else:
+        _, policy_kwargs = get_policy_network(variant["archi"], variant["policy_kwargs"], expl_env, "vanilla")
+        prior_skill = PointNetEncoder(**policy_kwargs, embedding = variant["embedding"])
     prior_skill.load_state_dict(torch.load(dir_models+'_prior.pth'))
-    
+
     copy_prior = copy.deepcopy(prior_skill)
-    
+
     decoder = DecoderSeq(variant["embedding"],variant["h"],variant["hidden_dim_lstm"])
-    decoder.load_state_dict(torch_load(dir_models+'_dec.pth'))
-    
-    policy = SpirlPolicy(copy_prior,decoder,variant["embedding"]
-    
+    decoder.load_state_dict(torch.load(dir_models+'_dec.pth'))
+
+    policy = SpirlPolicy(copy_prior,decoder,variant["embedding"])
+
     shared_base = None
 
     qf_class, qf_kwargs = utils.get_q_network(variant["archi"], qf_kwargs, expl_env,embedding=variant['embedding'])
