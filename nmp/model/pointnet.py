@@ -86,6 +86,7 @@ class PointNet(nn.Module):
 
         if self.coordinate_frame == "local":
             if self.goal_dim > 0:
+                print('o')
                 h = torch.cat((h, goal), dim=1)
 
         h = self.block1(h)
@@ -101,7 +102,7 @@ class PointNet(nn.Module):
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         n_params = sum([torch.prod(torch.tensor(p.size())) for p in model_parameters])
         return n_params.item()
-    
+
 class PointNetEncoder(nn.Module):
     def __init__(
         self,
@@ -127,7 +128,7 @@ class PointNetEncoder(nn.Module):
         self.elem_dim = elem_dim
         self.coordinate_frame = coordinate_frame
         self.output_activation = output_activation
-        
+
         self.q_action_dim = q_action_dim
         self.blocks_sizes = get_blocks_sizes(
             self.elem_dim,
@@ -150,15 +151,12 @@ class PointNetEncoder(nn.Module):
         )
         self.layers = nn.Sequential(
           nn.Linear(256,128),
-          nn.BatchNorm1d(num_features=128),
-          nn.LeakyReLU(0.1),
-          nn.Linear(128,128),
-          nn.BatchNorm1d(num_features=128),
-          nn.LeakyReLU(0.1),
-          nn.Linear(128,128),
-          nn.BatchNorm1d(num_features=128),
-          nn.LeakyReLU(0.1),
-          nn.Linear(128,2*embedding),
+          nn.ELU(),
+          nn.Linear(128,64),
+          nn.ELU(),
+          nn.Linear(62,32),
+          nn.ELU(),
+          nn.Linear(32,2*embedding),
         )
 
     def forward(self, *input, return_features=False):

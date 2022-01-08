@@ -34,6 +34,7 @@ parser.add_argument('--beta', type = float, default = 1e-2)
 parser.add_argument('--lr',type = float, default = 1e-3)
 parser.add_argument('--beta1', type = float, default = 0.9)
 parser.add_argument('--beta2', type = float, default = 0.999)
+parser.add_argument('--resume-model', type =str, default = 'not')
 
 args = parser.parse_args()
 
@@ -57,7 +58,11 @@ argsdic["policy_kwargs"]=dict(hidden_dim=args.hidden_dim, n_layers=args.n_layers
 _, policy_kwargs = get_policy_network(argsdic["archi"], argsdic["policy_kwargs"], env, "vanilla")
 
 Enc = PointNetEncoder(**policy_kwargs, embedding = args.embedding_dim)
-
+if args.resume_model != 'not':
+    old_model = torch.load(args.resume_model, map_location = torch.device(device))
+    Enc.load_state_dict(old_model)
+    print('resumed model loaded')
+    
 model = SkillPrior(Enc,args.embedding_dim,args.H,args.hidden_dim_lstm)
 model.to(device)
 
@@ -78,7 +83,7 @@ class SkillDataset(torch.utils.data.Dataset):
 
         # Load data and get label
         data = np.load(self.dir+'/'+self.files[index])
-        A,G,S = (data[k] for k in self.keys) 
+        A,G,S = (data[k] for k in self.keys)
         A = A.reshape(self.H,2)
         S = np.hstack((S,G))
         return torch.Tensor(S),torch.Tensor(A)
@@ -121,21 +126,26 @@ model.actionsDecoder.eval()
 for epoch in tqdm(range(args.epochs)):
     tL1,tL2,m=0,0,0
     model.statesEncoder.train()
+    if epoch <= 50:
+        print(args.lr*epoch/50)
+        for g in optimizer.param_groups:
+            g['lr'] = args.lr*epoch/50
     for states,actions in trainingLoader:
         actions=actions.to(device)
 
         (zs_mean,zs_var),(pa_z,qa_z),z,actions_ = model.forward_state(states.to(device))
         q_z = model.obtain_q_z(actions)
 
-        tL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
-
-        loss = torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean()
+        lossMSE= torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean()
+        tL1 += lossMSE.item()
+        lossKL = torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean()
+        tL2 += lossKL.item()
+        loss = lossMSE + lossKL
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        tL2+=loss.item()
         m+=1
     model.statesEncoder.eval()
 
@@ -146,7 +156,7 @@ for epoch in tqdm(range(args.epochs)):
         (zs_mean,zs_var),(pa_z,qa_z),z,actions_ = model.forward_state(states.to(device))
         q_z = model.obtain_q_z(actions)
 
-        vL1 += torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
+        vL1 += torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean().item()
         vL2 += torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean().item()
 
         k+=1

@@ -74,7 +74,8 @@ class SkillDataset(torch.utils.data.Dataset):
 
         # Load data and get label
         data = np.load(self.dir+'/'+self.files[index])
-        A = (data[k] for k in self.keys) 
+        A, = (data[k] for k in self.keys) 
+        A = A.reshape(self.H,2)
         return torch.Tensor(A)
 
 def log(path, file):
@@ -108,15 +109,21 @@ validationLoader = torch.utils.data.DataLoader(datasetV, batch_size = 100)
 
 optimizerActions = torch.optim.Adam(list(model.actionsEncoder.parameters())+list(model.actionsDecoder.parameters()), lr=args.lr, betas=[args.beta1,args.beta2])
 
-for epoch in tqdm(range(args.epochs)):
-    tL1,tL2,,m=0,0,0
+for epoch in tqdm(range(args.epochs+1)):
+    tL1,tL2,m=0,0,0
     model.train()
-    for states,actions in trainingLoader:
+    if epoch <= 100:
+        print(args.lr*epoch/100)
+        for g in optimizerActions.param_groups:
+            g['lr'] = args.lr*epoch/100
+            
+
+    for actions in trainingLoader:
         actions=actions.to(device)
         (z_mu,z_var),(q_z,p_z),z,actions_ =  model.forward_actions(actions)
         
 
-        loss = nn.MSELoss(reduction='none')(actions - actions_).sum(axis=-1).sum(axis=-1).mean()
+        loss = torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean()
         tL1+=loss.item()
         loss += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
         
@@ -131,18 +138,18 @@ for epoch in tqdm(range(args.epochs)):
     model.eval()
     
     vL1,vL2,k=0,0,0
-    for states,actions in validationLoader:
+    for actions in validationLoader:
         with torch.no_grad():
             actions=actions.to(device)
             (z_mu,z_var),(q_z,p_z),z,actions_ =  model.forward_actions(actions)
         
 
-            loss = nn.MSELoss(reduction='none')(actions - actions_).sum(axis=-1).sum(axis=-1).mean()
-            vl1 += loss.item()
+            loss = torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean()
+            vL1 += loss.item()
             loss += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
 
             vL2+=loss.item()
-            m+=1
+            k+=1
     logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k))
 
 

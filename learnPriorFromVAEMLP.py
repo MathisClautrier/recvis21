@@ -5,9 +5,8 @@ from tqdm import tqdm
 import random
 import click
 from nmp.launcher.utils import *
-from nmp.model.pointnet import PointNetEncoder
 import torch
-from nmp.model.skill import SkillPrior
+from nmp.model.skill import SkillPrior, MlpSkillEncoder
 import argparse
 from os import listdir
 from os.path import isfile, join
@@ -20,6 +19,7 @@ parser.add_argument('--seed', type = int, default = 0, help = 'random seed')
 parser.add_argument('--embedding-dim', type = int, default = 10, help = 'embedding dimension')
 parser.add_argument('--H', type = int, default = 10, help = 'trajectory size')
 parser.add_argument('--data-dir', type = str, default = 'not_provided',help='direction to the data must contain a training folder and a validation folder')
+parser.add_argument('--model-dir', type = str, default = 'not_provided',help='direction to the saved model')
 parser.add_argument('--archi',type = str, default = 'pointnet', help = 'backbone of the state encoder')
 parser.add_argument('--hidden-dim',type = int, default = 256)
 parser.add_argument('--hidden-dim-lstm',type = int, default = 128)
@@ -33,27 +33,37 @@ parser.add_argument('--beta', type = float, default = 1e-2)
 parser.add_argument('--lr',type = float, default = 1e-3)
 parser.add_argument('--beta1', type = float, default = 0.9)
 parser.add_argument('--beta2', type = float, default = 0.999)
+parser.add_argument('--resume-model', type =str, default = 'not')
+parser.add_argument('--optim', type =str, default = 'Adam')
+parser.add_argument('--warmup', type =int, default = 50, help = 'number of warmup epochs')
+
 
 args = parser.parse_args()
-
-if args.data_dir == 'not_provided':
-    print('The directory in which the data is stored must be provided.')
-    raise ValueError
 
 if args.GPU:
     device = 'cuda'
 else:
     device = 'cpu'
 
+if args.data_dir == 'not_provided':
+    print('The directory in which the data is stored must be provided.')
+    raise ValueError
+if args.model_dir == 'not_provided':
+    print('The directory in which the VAE model is stored must be provided.')
+    raise ValueError
+
+
+
 argsdic = vars(args)
 
 env = gym.make(args.env_name)
 
-argsdic["policy_kwargs"]=dict(hidden_dim=args.hidden_dim, n_layers=args.n_layers)
-_, policy_kwargs = get_policy_network(argsdic["archi"], argsdic["policy_kwargs"], env, "vanilla")
-
-Enc = PointNetEncoder(**policy_kwargs, embedding = args.embedding_dim)
-
+input_size = env.observation_space.spaces["observation"].low.size
+Enc = MlpSkillEncoder(input_size+2,args.embedding_dim)
+if args.resume_model != 'not':
+    old_model = torch.load(args.resume_model, map_location = torch.device(device))
+    Enc.load_state_dict(old_model)
+    print('resumed model loaded')
 model = SkillPrior(Enc,args.embedding_dim,args.H,args.hidden_dim_lstm)
 model.to(device)
 
@@ -62,7 +72,7 @@ class SkillDataset(torch.utils.data.Dataset):
         'Initialization'
         self.files = [f for f in listdir(directory) if isfile(join(directory, f))]
         self.dir = directory
-        self.keys = ['sequence','state']
+        self.keys = ['sequence','representation_goal','state']
         self.H = H
 
     def __len__(self):
@@ -74,8 +84,9 @@ class SkillDataset(torch.utils.data.Dataset):
 
         # Load data and get label
         data = np.load(self.dir+'/'+self.files[index])
-        A,S = (data[k] for k in self.keys)
+        A,G,S = (data[k] for k in self.keys)
         A = A.reshape(self.H,2)
+        S = np.hstack((S,G))
         return torch.Tensor(S),torch.Tensor(A)
 
 def log(path, file):
@@ -106,37 +117,61 @@ trainingLoader = torch.utils.data.DataLoader(datasetT, batch_size = args.batch_s
 datasetV = SkillDataset(args.data_dir+'/validation',args.H)
 validationLoader = torch.utils.data.DataLoader(datasetV, batch_size = 100)
 
-optimizer = torch.optim.Adam(list(model.actionsEncoder.parameters())+list(model.actionsDecoder.parameters()), lr=args.lr, betas=[args.beta1,args.beta2])
+model.actionsDecoder.load_state_dict(torch.load(args.model_dir+'_dec.pth',map_location=torch.device(device)))
+model.actionsEncoder.load_state_dict(torch.load(args.model_dir+'_enc.pth',map_location=torch.device(device)))
+
+if args.optim =='Adam':
+    optimizer = torch.optim.Adam(model.statesEncoder.parameters(), lr=args.lr, betas=[args.beta1,args.beta2])
+elif args.optim == 'SGD':
+    optimizer = torch.optim.SGD(model.statesEncoder.parameters(), lr=args.lr)
+else:
+    print('This optiimizer is not supported.')
+    raise ValueError
+
+def linearWarmUP(epochs):
+    if epochs >= args.warmup:
+        return 1
+    else:
+        return epochs/args.warmup
+
+scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda = linearWarmUP,verbose = True)
+
+model.actionsEncoder.eval()
+model.actionsDecoder.eval()
 
 for epoch in tqdm(range(args.epochs)):
     tL1,tL2,m=0,0,0
-    model.train()
+    model.statesEncoder.train()
     for states,actions in trainingLoader:
         actions=actions.to(device)
-        (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
 
+        (zs_mean,zs_var),(pa_z,qa_z),z,actions_ = model.forward_state(states.to(device))
+        q_z = model.obtain_q_z(actions)
 
-        lossA = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean()
-        tL1+=lossA.item()
-        lossA += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
+        lossMSE= torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean()
+        tL1 += lossMSE.item()
+        lossKL = torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean()
+        tL2 += lossKL.item()
+        loss = lossMSE + lossKL
 
         optimizer.zero_grad()
-        lossA.backward()
+        loss.backward()
         optimizer.step()
-
-        tL2+=lossA.item()
         m+=1
-    model.eval()
-
+    model.statesEncoder.eval()
+    scheduler.step()
     vL1,vL2,k=0,0,0
     for states,actions in validationLoader:
-        actions=actions.to(device)
-        (z_mu,z_var,zs_mu,zs_var),(q_z,p_z,pa_z),z,actions_ =  model.forward(states.to(device),actions)
+        with torch.no_grad():
+            actions=actions.to(device)
 
-        vL1 = torch.square(actions - actions_).sum(axis=1).mean(axis=0).mean().item()
-        vL2 =vL1+ args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean().item()
-        k+=1
+            (zs_mean,zs_var),(pa_z,qa_z),z,actions_ = model.forward_state(states.to(device))
+            q_z = model.obtain_q_z(actions)
+
+            vL1 += torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean().item()
+            vL2 += torch.distributions.kl.kl_divergence(q_z,pa_z).sum(axis=1).mean().item()
+
+            k+=1
     logger.info(str(epoch)+','+str(tL1/m)+','+str(tL2/m)+','+str(vL1/k)+','+str(vL2/k))
 
-torch.save(model.actionsEncoder.state_dict(), args.log_dir+'/'+args.log_name+'_enc.pth')
-torch.save(model.actionsDecoder.state_dict(), args.log_dir+'/'+args.log_name+'_dec.pth')
+torch.save(model.statesEncoder.state_dict(), args.log_dir+'/'+args.log_name+'_prior.pth')
