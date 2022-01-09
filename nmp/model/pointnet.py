@@ -152,7 +152,7 @@ class PointNetEncoder(nn.Module):
           nn.ELU(),
           nn.Linear(128,64),
           nn.ELU(),
-          nn.Linear(62,32),
+          nn.Linear(64,32),
           nn.ELU(),
           nn.Linear(32,2*output_size),
         )

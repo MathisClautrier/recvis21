@@ -87,12 +87,13 @@ def get_policy_network(archi, kwargs, env, policy_type):
     return policy_class, kwargs
 
 def get_policy_network_spirl(archi, kwargs, env):
-    output_size = kwargs["embedding"]
+    output_size = kwargs.pop("embedding")
     obs_dim = env.observation_space.spaces["observation"].low.size
     goal_dim = env.observation_space.spaces["representation_goal"].low.size
 
     kwargs["output_size"] = output_size
-
+    if archi != "kinnet":
+        kwargs["hidden_sizes"] = [kwargs.pop("hidden_dim")] * kwargs.pop("n_layers")
     if archi != "mlp":
         robot_props = env.robot_props
         obs_indices = env.obs_indices
@@ -113,7 +114,6 @@ def get_policy_network_spirl(archi, kwargs, env):
         # kwargs["hidden_activation"] = torch.sin
     else:
         raise ValueError(f"Unknown network archi: {archi}")
-
     return policy_class, kwargs
 
 def get_q_network(archi, kwargs, env, classification=False,embedding=None):
@@ -163,5 +163,4 @@ def get_q_network(archi, kwargs, env, classification=False,embedding=None):
         kwargs["coordinate_frame"] = coordinate_frame
     else:
         raise ValueError(f"Unknown network archi: {archi}")
-
     return qf_class, kwargs

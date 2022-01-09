@@ -135,6 +135,8 @@ class MazeGoal(Base):
         depth = np.random.choice(values,p=prob)
         paths,wanted_path = self.available_path(depth_max=depth)
         N = len(wanted_path)
+        if N ==0:
+            return self.pick_goal_cell()
         i = np.random.randint(N)
         return paths[wanted_path[i]][-1]
 
