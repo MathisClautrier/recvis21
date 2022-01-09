@@ -72,7 +72,6 @@ def main(
     valid_modes = ["vanilla", "her"]
     valid_archi = [
         "mlp",
-        "cnn",
         "pointnet",
     ]
     if mode not in valid_modes:
@@ -125,9 +124,8 @@ def main(
             alpha=alpha,
         ),
         qf_kwargs=dict(hidden_dim=hidden_dim, n_layers=n_layers),
-        policy_kwargs=dict(hidden_dim=hidden_dim, n_layers=n_layers),
+        policy_kwargs=dict(hidden_dim=hidden_dim, n_layers=n_layers,embedding=embedding),
         log_dir=exp_dir,
-        MLP = True,
     )
     if mode == "her":
         variant["replay_buffer_kwargs"].update(

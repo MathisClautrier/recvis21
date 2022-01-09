@@ -34,20 +34,21 @@ def get_networks(variant, expl_env):
     qf_kwargs = variant["qf_kwargs"]
     dir_models = variant["dir_models"]
 
-    if variant['MLP']:
-        input_size = expl_env.observation_space.spaces["observation"].low.size
-        prior_skill = MlpSkillEncoder(input_size+2,variant["embedding"])
-    else:
-        _, policy_kwargs = get_policy_network(variant["archi"], variant["policy_kwargs"], expl_env, "vanilla")
-        prior_skill = PointNetEncoder(**policy_kwargs, embedding = variant["embedding"])
-    prior_skill.load_state_dict(torch.load(dir_models+'_prior.pth'))
+    input_size = expl_env.observation_space.spaces["observation"].low.size
+    prior_skill = MlpSkillEncoder(input_size+2,variant["embedding"])
+    prior_skill.load_state_dict(torch.load(variant['dir_models']+'_prior.pth'))
 
-    copy_prior = copy.deepcopy(prior_skill)
+    policy_class, plc_kwargs = utils.get_policy_network_spirl(variant['archi'],variant['policy_kwargs'],expl_env)
+    if variant['archi']=='mlp':
+        policy_enc = policy_class(plc_kwargs['input_size'],plc_kwargs['output_size'])
+    else:
+        policy_enc = policy_class(**plc_kwargs)
+
 
     decoder = DecoderSeq(variant["embedding"],variant["h"],variant["hidden_dim_lstm"])
-    decoder.load_state_dict(torch.load(dir_models+'_dec.pth'))
+    decoder.load_state_dict(torch.load(variant['dir_models']+'_dec.pth'))
 
-    policy = SpirlPolicy(copy_prior,decoder,variant["embedding"])
+    policy = SpirlPolicy(policy_enc,decoder,variant["embedding"])
 
     shared_base = None
 
@@ -59,7 +60,8 @@ def get_networks(variant, expl_env):
     target_qf2 = qf_class(**qf_kwargs)
     print("Policy:")
     print(policy)
-
+    print("Q function:")
+    print(qf1)
     nets = [qf1, qf2, target_qf1, target_qf2, policy, prior_skill, shared_base]
     print(f"Q function num parameters: {qf1.num_params()}")
     print(f"Policy num parameters: {policy.num_params()}")

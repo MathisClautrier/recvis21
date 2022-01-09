@@ -5,7 +5,8 @@ from rlkit.torch.networks import FlattenMlp
 from rlkit.torch.sac.policies import MakeDeterministic, TanhGaussianPolicy
 
 from nmp.model.cnn import CNN
-from nmp.model.pointnet import PointNet
+from nmp.model.pointnet import PointNet,PointNetEncoder
+from nmp.model.skill import MlpSkillEncoder
 from nmp.policy.tanh_gaussian import (
     TanhGaussianCNNPolicy,
     TanhGaussianPointNetPolicy,
@@ -18,12 +19,20 @@ ARCHI = {
     "cnn": {"vanilla": CNN, "tanhgaussian": TanhGaussianCNNPolicy},
 }
 
+ARCHI_policy = {
+    "mlp": MlpSkillEncoder,
+    "pointnet": PointNetEncoder,
+}
 
 def archi_to_network(archi_name, function_type):
     allowed_function_type = ["vanilla", "tanhgaussian"]
     if function_type not in allowed_function_type:
         raise ValueError(f"Function name should be in {allowed_function_type}")
     return ARCHI[archi_name][function_type]
+
+def archi_to_network_spirl(archi_name):
+    return ARCHI_policy[archi_name]
+
 
 
 def get_policy_network(archi, kwargs, env, policy_type):
@@ -77,6 +86,35 @@ def get_policy_network(archi, kwargs, env, policy_type):
 
     return policy_class, kwargs
 
+def get_policy_network_spirl(archi, kwargs, env):
+    output_size = kwargs["embedding"]
+    obs_dim = env.observation_space.spaces["observation"].low.size
+    goal_dim = env.observation_space.spaces["representation_goal"].low.size
+
+    kwargs["output_size"] = output_size
+
+    if archi != "mlp":
+        robot_props = env.robot_props
+        obs_indices = env.obs_indices
+        obstacles_dim = env.obstacles_dim
+        coordinate_frame = env.coordinate_frame
+
+    policy_class = archi_to_network_spirl(archi)
+    if archi == "mlp":
+        kwargs["input_size"] = obs_dim + goal_dim
+    elif "pointnet" in archi:
+        obstacle_point_dim = env.obstacle_point_dim
+        kwargs["q_action_dim"] = 0
+        kwargs["robot_props"] = robot_props
+        kwargs["elem_dim"] = obstacle_point_dim
+        kwargs["input_indices"] = obs_indices
+        kwargs["hidden_activation"] = F.elu
+        kwargs["coordinate_frame"] = coordinate_frame
+        # kwargs["hidden_activation"] = torch.sin
+    else:
+        raise ValueError(f"Unknown network archi: {archi}")
+
+    return policy_class, kwargs
 
 def get_q_network(archi, kwargs, env, classification=False,embedding=None):
     if embedding is None:

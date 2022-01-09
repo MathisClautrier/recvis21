@@ -97,9 +97,7 @@ class ModelWrapper:
         model = self._model
         d = self.distance(qw0, qw1)
         # ensure at least one point is generated
-        print(qw0,qw1)
         d = max(d, delta)
-        print(d,delta)
         n_pts = np.ceil(d / delta).astype(int)
         steps = np.linspace(0, 1, num=n_pts, endpoint=True)
         path = []

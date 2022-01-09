@@ -115,7 +115,6 @@ class PointNetEncoder(nn.Module):
         output_activation=identity,
         init_w=3e-3,
         hidden_activation=F.elu,
-        embedding=10,
     ):
         super().__init__()
         self.output_size = output_size
@@ -155,7 +154,7 @@ class PointNetEncoder(nn.Module):
           nn.ELU(),
           nn.Linear(62,32),
           nn.ELU(),
-          nn.Linear(32,2*embedding),
+          nn.Linear(32,2*output_size),
         )
 
     def forward(self, *input, return_features=False):
