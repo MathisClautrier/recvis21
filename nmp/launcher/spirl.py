@@ -43,7 +43,9 @@ def get_networks(variant, expl_env):
         policy_enc = policy_class(plc_kwargs['input_size'],plc_kwargs['output_size'])
     else:
         policy_enc = policy_class(**plc_kwargs)
-
+    if variant['load_prior']:
+        policy_enc.load_state_dict(prior_skill.state_dict())
+        print("Prior loaded")
 
     decoder = DecoderSeq(variant["embedding"],variant["h"],variant["hidden_dim_lstm"])
     decoder.load_state_dict(torch.load(variant['dir_models']+'_dec.pth'))

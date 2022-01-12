@@ -41,6 +41,7 @@ from nmp import settings
 @click.option("-h","--h", default =10, type = int)
 @click.option("-h-dim-lstm","--hidden-dim-lstm", default =128, type = int)
 @click.option("-t-div","--target-divergence", default =1, type = int)
+@click.option("-load-prior", "--load_prior/--no-load-prior", is_flag=True, default=False)
 def main(
     env_name,
     exp_dir,
@@ -68,6 +69,7 @@ def main(
     h,
     hidden_dim_lstm,
     target_divergence,
+    load_prior,
 ):
     valid_modes = ["vanilla", "her"]
     valid_archi = [
@@ -97,6 +99,7 @@ def main(
         seed=seed,
         resume=resume,
         mode=mode,
+        load_prior = load_prior,
         embedding = embedding,
         dir_models = dir_models,
         h=h,
