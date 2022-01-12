@@ -37,6 +37,7 @@ from nmp import settings
     help="all, last, gap, gap_and_last, none",
 )
 @click.option("-snap-gap", "--snapshot-gap", default=10, type=int)
+@click.option("-resume-dir", "--resume-dir", default='not', type=str)
 def main(
     env_name,
     exp_dir,
@@ -60,6 +61,7 @@ def main(
     snapshot_mode,
     snapshot_gap,
     cpu,
+    resume_dir,
 ):
     valid_modes = ["vanilla", "her"]
     valid_archi = [
@@ -115,6 +117,8 @@ def main(
         qf_kwargs=dict(hidden_dim=hidden_dim, n_layers=n_layers),
         policy_kwargs=dict(hidden_dim=hidden_dim, n_layers=n_layers),
         log_dir=exp_dir,
+        resume_dir = resume_dir,
+        cpu = cpu,
     )
     if mode == "her":
         variant["replay_buffer_kwargs"].update(

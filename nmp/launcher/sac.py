@@ -26,12 +26,12 @@ def get_replay_buffer(variant, expl_env):
     mode = variant["mode"]
     if mode == "vanilla":
         replay_buffer = EnvReplayBuffer(
-            env=expl_env, **variant["replay_buffer_kwargs"],
+            env=expl_env, embedding = None,**variant["replay_buffer_kwargs"],
         )
 
     elif mode == "her":
         replay_buffer = ObsDictRelabelingBuffer(
-            env=expl_env, **variant["her"], **variant["replay_buffer_kwargs"]
+            env=expl_env,embedding = None, **variant["her"], **variant["replay_buffer_kwargs"]
         )
 
     return replay_buffer
@@ -114,6 +114,13 @@ def sac(variant):
     qf1, qf2, target_qf1, target_qf2, policy, shared_base = get_networks(
         variant, expl_env
     )
+    if variant['resume']:
+        models = torch.load('models_trained/params_medium_750.pkl',map_location=torch.device('cpu'))
+        qf1.load_state_dict(models['trainer/qf1'].state_dict)
+        qf2.load_state_dict(models['trainer/qf2'].state_dict)
+        target_qf1.load_state_dict(models['trainer/target_qf1'].state_dict)
+        target_qf2.load_state_dict(models['trainer/target_qf2'].state_dict)
+        policy.load_state_dict(models['trainer/policy'].state_dict)
     expl_policy = policy
     eval_policy = MakeDeterministic(policy)
 
