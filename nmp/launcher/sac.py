@@ -115,12 +115,12 @@ def sac(variant):
         variant, expl_env
     )
     if variant['resume']:
-        models = torch.load('models_trained/params_medium_750.pkl',map_location=torch.device('cpu'))
-        qf1.load_state_dict(models['trainer/qf1'].state_dict)
-        qf2.load_state_dict(models['trainer/qf2'].state_dict)
-        target_qf1.load_state_dict(models['trainer/target_qf1'].state_dict)
-        target_qf2.load_state_dict(models['trainer/target_qf2'].state_dict)
-        policy.load_state_dict(models['trainer/policy'].state_dict)
+        models = torch.load(variant['resume_dir'],map_location=torch.device('cpu'))
+        qf1.load_state_dict(models['trainer/qf1'].state_dict())
+        qf2.load_state_dict(models['trainer/qf2'].state_dict())
+        target_qf1.load_state_dict(models['trainer/target_qf1'].state_dict())
+        target_qf2.load_state_dict(models['trainer/target_qf2'].state_dict())
+        policy.load_state_dict(models['trainer/policy'].state_dict())
     expl_policy = policy
     eval_policy = MakeDeterministic(policy)
 
