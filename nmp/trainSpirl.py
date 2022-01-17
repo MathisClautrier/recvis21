@@ -41,7 +41,7 @@ from nmp import settings
 @click.option("-h","--h", default =10, type = int)
 @click.option("-h-dim-lstm","--hidden-dim-lstm", default =128, type = int)
 @click.option("-t-div","--target-divergence", default =1, type = int)
-@click.option("-load-prior", "--load_prior/--no-load-prior", is_flag=True, default=False)
+@click.option("-load-prior", "--load-prior/--no-load-prior", is_flag=True, default=False)
 def main(
     env_name,
     exp_dir,
