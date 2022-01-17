@@ -26,12 +26,12 @@ def get_replay_buffer(variant, expl_env):
     mode = variant["mode"]
     if mode == "vanilla":
         replay_buffer = EnvReplayBuffer(
-            env=expl_env, embedding = None,**variant["replay_buffer_kwargs"],
+            env=expl_env, **variant["replay_buffer_kwargs"],
         )
 
     elif mode == "her":
         replay_buffer = ObsDictRelabelingBuffer(
-            env=expl_env,embedding = None, **variant["her"], **variant["replay_buffer_kwargs"]
+            env=expl_env, **variant["her"], **variant["replay_buffer_kwargs"]
         )
 
     return replay_buffer

@@ -94,7 +94,7 @@ def main(
         resume=resume,
         mode=mode,
         archi=archi,
-        replay_buffer_kwargs=dict(max_replay_buffer_size=replay_buffer_size,),
+        replay_buffer_kwargs=dict(max_replay_buffer_size=replay_buffer_size,embedding = None),
         algorithm_kwargs=dict(
             batch_size=batch_size,
             num_epochs=epochs,

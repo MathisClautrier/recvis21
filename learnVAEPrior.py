@@ -20,9 +20,6 @@ parser.add_argument('--seed', type = int, default = 0, help = 'random seed')
 parser.add_argument('--embedding-dim', type = int, default = 10, help = 'embedding dimension')
 parser.add_argument('--H', type = int, default = 10, help = 'trajectory size')
 parser.add_argument('--data-dir', type = str, default = 'not_provided',help='direction to the data must contain a training folder and a validation folder')
-parser.add_argument('--archi',type = str, default = 'pointnet', help = 'backbone of the state encoder')
-parser.add_argument('--hidden-dim',type = int, default = 256)
-parser.add_argument('--hidden-dim-lstm',type = int, default = 128)
 parser.add_argument('--n-layers', type = int, default =3)
 parser.add_argument('--log-dir', type = str, default ='.')
 parser.add_argument('--log-name', type = str, default ='pointnet_medium_seed_0')
@@ -33,29 +30,37 @@ parser.add_argument('--beta', type = float, default = 1e-2)
 parser.add_argument('--lr',type = float, default = 1e-3)
 parser.add_argument('--beta1', type = float, default = 0.9)
 parser.add_argument('--beta2', type = float, default = 0.999)
+parser.add_argument('--warmup', type =int, default = 50, help = 'number of warmup epochs')
+parser.add_argument('--resume-model', type =str, default = 'not')
 
 args = parser.parse_args()
 
 if args.data_dir == 'not_provided':
     print('The directory in which the data is stored must be provided.')
     raise ValueError
-    
+
 if args.GPU:
     device = 'cuda'
 else:
     device = 'cpu'
-    
+
 argsdic = vars(args)
 
 env = gym.make(args.env_name)
 
-argsdic["policy_kwargs"]=dict(hidden_dim=args.hidden_dim, n_layers=args.n_layers)
-_, policy_kwargs = get_policy_network(argsdic["archi"], argsdic["policy_kwargs"], env, "vanilla")
-
-Enc = PointNetEncoder(**policy_kwargs, embedding = args.embedding_dim)
-
+input_size = env.observation_space.spaces["observation"].low.size
+Enc = MlpSkillEncoder(input_size+2,args.embedding_dim)
+print(Enc)
 model = SkillPrior(Enc,args.embedding_dim,args.H,args.hidden_dim_lstm)
+if args.resume_model != 'not':
+    old_dec = torch.load(args.resume_model+'_dec.pth', map_location = torch.device(device))
+    model.actionsDecoder.load_state_dict(old_dec)
+    old_enc = torch.load(args.resume_model+'_enc.pth', map_location = torch.device(device))
+    model.actionsEncoder.load_state_dict(old_enc)
+    print('resumed model loaded')
 model.to(device)
+
+
 
 class SkillDataset(torch.utils.data.Dataset):
     def __init__(self, directory,H):
@@ -74,7 +79,7 @@ class SkillDataset(torch.utils.data.Dataset):
 
         # Load data and get label
         data = np.load(self.dir+'/'+self.files[index])
-        A, = (data[k] for k in self.keys) 
+        A, = (data[k] for k in self.keys)
         A = A.reshape(self.H,2)
         return torch.Tensor(A)
 
@@ -107,42 +112,45 @@ datasetV = SkillDataset(args.data_dir+'/validation',args.H)
 validationLoader = torch.utils.data.DataLoader(datasetV, batch_size = 100)
 
 
-optimizerActions = torch.optim.Adam(list(model.actionsEncoder.parameters())+list(model.actionsDecoder.parameters()), lr=args.lr, betas=[args.beta1,args.beta2])
+optimizer= torch.optim.Adam(list(model.actionsEncoder.parameters())+list(model.actionsDecoder.parameters()), lr=args.lr, betas=[args.beta1,args.beta2])
+def linearWarmUP(epochs):
+    if epochs >= args.warmup:
+        return 1
+    else:
+        return epochs/args.warmup
 
+scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda = linearWarmUP,verbose = True)
 for epoch in tqdm(range(args.epochs+1)):
     tL1,tL2,m=0,0,0
     model.train()
-    if epoch <= 100:
-        print(args.lr*epoch/100)
-        for g in optimizerActions.param_groups:
-            g['lr'] = args.lr*epoch/100
-            
+
 
     for actions in trainingLoader:
         actions=actions.to(device)
         (z_mu,z_var),(q_z,p_z),z,actions_ =  model.forward_actions(actions)
-        
+
 
         loss = torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean()
         tL1+=loss.item()
         loss += args.beta*torch.distributions.kl.kl_divergence(q_z,p_z).sum(axis=1).mean()
-        
 
 
-        optimizerActions.zero_grad()
+
+        optimizer.zero_grad()
         loss.backward()
-        optimizerActions.step()
-        
+        optimizer.step()
+
         tL2+=loss.item()
         m+=1
     model.eval()
-    
+    scheduler.step()
+
     vL1,vL2,k=0,0,0
     for actions in validationLoader:
         with torch.no_grad():
             actions=actions.to(device)
             (z_mu,z_var),(q_z,p_z),z,actions_ =  model.forward_actions(actions)
-        
+
 
             loss = torch.nn.MSELoss(reduction='none')(actions, actions_).sum(axis=-1).sum(axis=-1).mean()
             vL1 += loss.item()
