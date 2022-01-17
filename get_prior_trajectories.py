@@ -45,6 +45,7 @@ random.seed(args.seed)
 np.random.seed(args.seed)
 count=0
 H = args.H
+noise = args.noisy
 if loaded:
     while count < n_train:
         state = env.reset()
