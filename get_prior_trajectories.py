@@ -73,7 +73,7 @@ if loaded:
                 if count ==n_train:
                     break
                 if count %100==0:
-                    print(count)
+                    print('*')
 
     count=0
     while count < n_val:
@@ -102,18 +102,21 @@ if loaded:
                 if count ==n_val:
                     break
 else:
+    print('From oracle')
     while count < n_train:
         state = env.reset()
         done = False
         states = []
         actions=[]
         env.shortest_path()
-        while not done:
+        t=0
+        while not done and t <80:
             action = env.one_step_oracle(noisy=noise)
             states.append(state)
             actions.append(action)
             state,reward,done,info = env.step(action)
             done = done[0]
+            t+=1
         N = len(actions)-H
         for i in range(N):
             S = states[i]['observation']
@@ -124,8 +127,8 @@ else:
             OBS = np.hstack((S,RG))
             np.savez(args.log_dir+'/training/'+str(count),state =S, sequence = A, achieved_q = AQ, desired_q = DQ, representation_goal = RG, observation = OBS)
             count+=1
-            if count%10000 == 0:
-                print(count)
+            if count%100 == 0:
+                print('*')
             if count == n_train:
                 break
 

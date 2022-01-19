@@ -85,9 +85,9 @@ def main(
     exp_dir = os.path.join(machine_log_dir, exp_dir, f"seed{seed}")
     # multi-gpu and batch size scaling
     replay_buffer_size = replay_buffer_size
-    num_expl_steps_per_train_loop = 100
-    num_eval_steps_per_epoch = 100
-    min_num_steps_before_training = 100
+    num_expl_steps_per_train_loop = int(1000/h)
+    num_eval_steps_per_epoch = int(1000/h)
+    min_num_steps_before_training = 1000
     num_trains_per_train_loop = 1000
     # learning rate and soft update linear scaling
     policy_lr = learning_rate
@@ -148,7 +148,7 @@ def main(
         "snapshot_gap": snapshot_gap,
     }
     setup_logger(**setup_logger_kwargs)
-    ptu.set_gpu_mode(False, distributed_mode=False)
+    ptu.set_gpu_mode(not cpu, distributed_mode=False)
     print(f"Start training...")
     spirl(variant)
 
