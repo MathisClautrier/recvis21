@@ -8,7 +8,7 @@ CoRL 2020
 - [Project Page](https://www.di.ens.fr/willow/research/nmp_repr/)
 - [Paper](https://arxiv.org/abs/2008.11174)
 
-The purpose of this project was to improve perfomances obtain on difficult maze problems using prior skills as described in:
+The purpose of this project was to improve perfomances obtained on difficult maze problems using prior skills as described in:
 
 Karl Pertsch,  Youngwoon Lee, Joseph Lim\
 CoRL 2020
@@ -77,7 +77,7 @@ Finally, you can train a SPiRL agent by using
 python -m nmp.trainSpirl Maze-Simple-v0 spirlMLP --horizon 8 --seed 0 --epochs 1500 --archi mlp --dir-models $PATHTOVAEANDPRIORSKILLS$ --load-prior
 ```
 
-Note that I proposed to use an horizon of 8 as each action (i.e embedding) yields 10 environment steps.
+Note that I proposed to use an horizon of 8 as each action (i.e embedding) yields 10 environment steps (H=10 by default you may modify this by specifying ```--H=$YOURCHOICE$``` in the previous runs).
 
 
 ### Results
