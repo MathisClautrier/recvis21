@@ -38,10 +38,12 @@ from nmp import settings
 @click.option("-snap-gap", "--snapshot-gap", default=10, type=int)
 @click.option("-z","--embedding", default =10, type = int)
 @click.option("-models","--dir-models", default ='.', type = str)
-@click.option("-H","--H", default =10, type = int)
+@click.option("-h","--h", default =10, type = int)
 @click.option("-h-dim-lstm","--hidden-dim-lstm", default =128, type = int)
 @click.option("-t-div","--target-divergence", default =1, type = int)
 @click.option("-load-prior", "--load-prior/--no-load-prior", is_flag=True, default=False)
+@click.option("-freeze", "--freeze/--no-freeze", is_flag=True, default=False)
+
 def main(
     env_name,
     exp_dir,
@@ -66,10 +68,11 @@ def main(
     cpu,
     embedding,
     dir_models,
-    H,
+    h,
     hidden_dim_lstm,
     target_divergence,
     load_prior,
+    freeze,
 ):
     valid_modes = ["vanilla", "her"]
     valid_archi = [
@@ -85,8 +88,8 @@ def main(
     exp_dir = os.path.join(machine_log_dir, exp_dir, f"seed{seed}")
     # multi-gpu and batch size scaling
     replay_buffer_size = replay_buffer_size
-    num_expl_steps_per_train_loop = int(1000/H)
-    num_eval_steps_per_epoch = int(1000/H)
+    num_expl_steps_per_train_loop = int(1000/h)
+    num_eval_steps_per_epoch = int(1000/h)
     min_num_steps_before_training = 1000
     num_trains_per_train_loop = 1000
     # learning rate and soft update linear scaling
@@ -102,7 +105,7 @@ def main(
         load_prior = load_prior,
         embedding = embedding,
         dir_models = dir_models,
-        h=H,
+        h=h,
         hidden_dim_lstm=hidden_dim_lstm,
         archi=archi,
         replay_buffer_kwargs=dict(max_replay_buffer_size=replay_buffer_size,embedding = embedding),
@@ -116,6 +119,7 @@ def main(
             max_path_length=horizon,
         ),
         trainer_kwargs=dict(
+            freeze = freeze,
             discount=0.99,
             soft_target_tau=soft_target_tau,
             target_update_period=1,
