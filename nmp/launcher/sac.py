@@ -121,6 +121,17 @@ def sac(variant):
         target_qf1.load_state_dict(models['trainer/target_qf1'].state_dict())
         target_qf2.load_state_dict(models['trainer/target_qf2'].state_dict())
         policy.load_state_dict(models['trainer/policy'].state_dict())
+    if variant['freeze']:
+        networks = (qf1,qf2,target_qf1,target_qf2,policy)
+        for network in networks:
+            lt = 0
+            for child in network.children():
+                if lt <2:
+                    print("freezing:")
+                    print(child)
+                    for params in child.parameters():
+                        params.requires_grad = False
+                lt+=1
     expl_policy = policy
     eval_policy = MakeDeterministic(policy)
 

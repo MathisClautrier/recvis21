@@ -38,6 +38,7 @@ from nmp import settings
 )
 @click.option("-snap-gap", "--snapshot-gap", default=10, type=int)
 @click.option("-resume-dir", "--resume-dir", default='not', type=str)
+@click.option("-freeze","--freeze",is_flag = True,default = False)
 def main(
     env_name,
     exp_dir,
@@ -62,6 +63,7 @@ def main(
     snapshot_gap,
     cpu,
     resume_dir,
+    freeze,
 ):
     valid_modes = ["vanilla", "her"]
     valid_archi = [
@@ -119,6 +121,7 @@ def main(
         log_dir=exp_dir,
         resume_dir = resume_dir,
         cpu = cpu,
+        freeze = freeze,
     )
     if mode == "her":
         variant["replay_buffer_kwargs"].update(
